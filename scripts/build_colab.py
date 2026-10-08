@@ -94,6 +94,23 @@ RELEASE_GPU = (
     "    pass"
 )
 
+# Colab wipes /content on disconnect; outputs are mirrored to Drive after every stage.
+BACKUP = "/content/drive/MyDrive/lab22-backup"
+DRIVE_RESTORE = (
+    "# Khôi phục kết quả đã lưu trên Drive (lần đầu chạy thì chưa có gì, không sao).\n"
+    "from google.colab import drive\n"
+    'drive.mount("/content/drive")\n'
+    f"!mkdir -p {BACKUP} && rsync -a {BACKUP}/ {WORKDIR}/ && echo 'Đã khôi phục từ Drive'"
+)
+DRIVE_SAVE = (
+    "# Lưu kết quả NB vừa chạy sang Drive (bỏ checkpoint). Bị ngắt thì chạy lại phần A rồi NB tiếp theo.\n"
+    "from google.colab import drive\n"
+    'drive.mount("/content/drive")\n'
+    f"!mkdir -p {BACKUP} && cd {WORKDIR} && rsync -a --exclude='*checkpoint*' --exclude='*-ckpt' "
+    f"--exclude='__pycache__' $(ls -d models adapters data submission gguf 2>/dev/null) {BACKUP}/ "
+    "&& echo 'Đã lưu lên Drive' && du -sh " + BACKUP
+)
+
 
 def render(tier: str) -> dict:
     big = tier == "BIGGPU"
@@ -143,12 +160,20 @@ def render(tier: str) -> dict:
     for script in BUNDLED_SCRIPTS:
         body = (REPO / "scripts" / script).read_text(encoding="utf-8")
         cells.append(code(f"%%writefile {WORKDIR}/scripts/{script}\n{body}"))
+    cells.append(md(
+        "### Khôi phục từ Google Drive\n\n"
+        f"Sau mỗi NB có một cell lưu kết quả vào `MyDrive/lab22-backup`. Nếu Colab bị ngắt: chạy lại "
+        "phần A từ đầu (gồm cell này), rồi chạy tiếp từ NB đang dở. Muốn chạy lại từ đầu thì xoá "
+        "thư mục đó trên Drive. `models/sft-merged` khoảng 8 GB; Drive miễn phí 15 GB."
+    ))
+    cells.append(code(DRIVE_RESTORE))
     for i, (stem, kind) in enumerate(STAGES):
         if i:
             # One Colab kernel runs every stage, so drop the previous stage's GPU objects.
             cells.append(code(RELEASE_GPU))
         cells.append(md(f"---\n# ⏵ `notebooks/{stem}.py` ({kind})"))
         cells.extend(percent_cells(REPO / "notebooks" / f"{stem}.py"))
+        cells.append(code(DRIVE_SAVE))
     return {
         "cells": cells,
         "metadata": {
