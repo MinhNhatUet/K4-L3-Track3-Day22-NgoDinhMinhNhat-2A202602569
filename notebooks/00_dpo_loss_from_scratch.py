@@ -59,8 +59,8 @@ print(f"sum log p = {total.item():.3f}   mean log p = {mean.item():.3f}")
 # %%
 def my_dpo_loss(pc, pr, rc, rr, beta=0.1):
     """pc/pr: policy log-prob chosen/rejected; rc/rr: reference. Trả về loss trung bình."""
-    # TODO: viết bằng torch.nn.functional.logsigmoid
-    return None
+    margin = beta * ((pc - rc) - (pr - rr))
+    return -torch.nn.functional.logsigmoid(margin).mean()
 
 
 # %%
@@ -102,6 +102,11 @@ for margin in (-2.0, 0.0, 2.0, 5.0):
 # Hai kịch bản đều làm margin tăng 2 nat. Loss giống hệt nhau, nhưng ở kịch
 # bản B log-prob của câu *được chọn* lại giảm. DPO không phân biệt được hai
 # trường hợp này; chỉ đường cong `rewards/chosen` ở NB3 cho bạn biết.
+#
+# **Trả lời:** DPO chỉ tối ưu *hiệu* hai log-ratio so với reference, không ràng
+# buộc riêng xác suất của chosen. Nếu log-prob chosen giảm 3 nat còn rejected giảm
+# 5 nat thì margin vẫn tăng β·((−3) − (−5)) = 2β, nên loss giảm dù chosen kém đi.
+# Khối xác suất bị đẩy khỏi cả hai câu sang các chuỗi khác (likelihood displacement).
 
 # %%
 ref_c, ref_r = torch.tensor([-20.0]), torch.tensor([-22.0])

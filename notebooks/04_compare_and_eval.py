@@ -158,6 +158,21 @@ plt.show()
 # `side_by_side.jsonl` (sinh greedy nên thường trùng giữa các lần chạy).
 
 # %%
+# Chấm chéo (bonus): có OPENAI_API_KEY + JUDGE_MODEL thì chấm thêm bằng OpenAI (khác họ Skywork)
+# trước hội đồng RM; §4 sẽ báo `cross_judge`. Không có key thì bỏ qua.
+if C.JUDGE_PROVIDER == "rm" and J.has_judge_key("openai") and C.JUDGE_MODEL:
+    call = J.make_caller("openai", C.JUDGE_MODEL)
+    api_judged = [{**r, **J.judge_pair(r["prompt"], r["sft"], r["dpo"], call)} for r in records]
+    (C.EVAL_DIR / "judge_results_api.json").write_text(
+        json.dumps(
+            {"judge": f"openai:{C.JUDGE_MODEL}", "outputs_sha256": OUTPUTS_SHA, "records": api_judged, "per_judge": {}},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+    print(f"openai:{C.JUDGE_MODEL} → {J.summarize(api_judged, seed=C.SEED)}")
+
+# %%
 provider = C.JUDGE_PROVIDER
 if provider != "rm" and not J.has_judge_key(provider):
     print(f"JUDGE_PROVIDER={provider} but its API key is missing → local reward-model panel.")
